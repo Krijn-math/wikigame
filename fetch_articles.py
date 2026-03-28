@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 """
-Fetch the top 1000 most-read English Wikipedia articles by Belgian readers in 2025,
-download their thumbnails, and write data/articles.json.
+Fetch Wikipedia Vital Articles (Level 3 and Level 4) and save to:
+  data/vital_l3.json  (~1000 articles)
+  data/vital_l4.json  (~10 000 articles, L4-only — excludes L3 titles)
+
+Also downloads thumbnails to data/images/.
+
+Usage:
+  python fetch_articles.py
 """
 
 import json
@@ -12,59 +18,109 @@ from pathlib import Path
 import requests
 
 DATA_DIR = Path("data")
-IMAGES_DIR = DATA_DIR / "images"
-OUTPUT_FILE = DATA_DIR / "articles.json"
+L3_FILE  = DATA_DIR / "vital_l3.json"
+L4_FILE  = DATA_DIR / "vital_l4.json"
 
 HEADERS = {"User-Agent": "WikipediaGame/1.0 (krijn@example.com)"}
+API     = "https://en.wikipedia.org/w/api.php"
 
-# Pages that are not real articles
-SKIP_PREFIXES = ("Special:", "Wikipedia:", "Help:", "Portal:", "File:", "Template:")
-SKIP_TITLES = {"Main_Page", "-"}
+# Titles that are navigation/disambiguation noise
+SKIP_PREFIXES = re.compile(
+    r"^(lists? of|category:|wikipedia:|template:|portal:|file:|help:)",
+    re.IGNORECASE,
+)
+SKIP_EXACT = {"Main Page", "-"}
 
 
-def fetch_top_month(year: int, month: int) -> list[dict]:
-    url = (
-        f"https://wikimedia.org/api/rest_v1/metrics/pageviews/"
-        f"top/en.wikipedia/all-access/{year}/{month:02d}/all-days"
-    )
-    resp = requests.get(url, headers=HEADERS, timeout=30)
+# ── API helpers ───────────────────────────────────────────────────────────────
+
+def api_get(params: dict) -> dict:
+    resp = requests.get(API, params={**params, "format": "json"}, headers=HEADERS, timeout=30)
     resp.raise_for_status()
-    return resp.json()["items"][0]["articles"]
+    return resp.json()
 
 
-def collect_top_articles(year: int, top_n: int = 1000) -> list[dict]:
-    """Aggregate en.wikipedia articles across all months, return top N by total views."""
-    view_totals: dict[str, int] = {}
+def get_subpages(ns_prefix: str) -> list[str]:
+    """
+    Return all page titles in Wikipedia namespace (ns=4) whose name starts
+    with `ns_prefix` (without the 'Wikipedia:' part).
+    e.g. ns_prefix='Vital_articles/Level/3'
+    """
+    pages = []
+    params = {
+        "action": "query",
+        "list": "allpages",
+        "apnamespace": "4",
+        "apprefix": ns_prefix,
+        "aplimit": "max",
+    }
+    while True:
+        data = api_get(params)
+        for p in data["query"]["allpages"]:
+            pages.append(p["title"])
+        cont = data.get("continue")
+        if not cont:
+            break
+        params.update(cont)
+        time.sleep(0.1)
+    return pages
 
-    for month in range(1, 13):
-        print(f"  Fetching {year}-{month:02d} ...", end=" ", flush=True)
+
+def get_linked_articles(page_title: str) -> set[str]:
+    """Return all mainspace (ns=0) article titles linked from a project page.
+
+    Uses action=parse so template-generated links (e.g. {{va|...}}) are included.
+    action=parse returns the fully rendered link list in one shot — no pagination needed.
+    """
+    data = api_get({
+        "action": "parse",
+        "page": page_title,
+        "prop": "links",
+        "redirects": "1",
+    })
+    return {
+        link["*"]
+        for link in data.get("parse", {}).get("links", [])
+        if link.get("ns") == 0
+    }
+
+
+def collect_titles_from_prefix(ns_prefix: str, extra_pages: list[str] | None = None) -> set[str]:
+    """
+    Discover all subpages under `ns_prefix`, plus any `extra_pages`,
+    then collect every mainspace article linked from them.
+    """
+    source_pages = get_subpages(ns_prefix)
+    if extra_pages:
+        source_pages += extra_pages
+    source_pages = list(dict.fromkeys(source_pages))  # deduplicate, preserve order
+
+    print(f"  Found {len(source_pages)} source pages for prefix '{ns_prefix}'")
+
+    all_titles: set[str] = set()
+    for i, page in enumerate(source_pages, 1):
+        print(f"  [{i:03d}/{len(source_pages)}] {page}", end=" ... ", flush=True)
         try:
-            articles = fetch_top_month(year, month)
-        except requests.HTTPError as e:
-            print(f"HTTP {e.response.status_code} — skipping")
-            time.sleep(1)
-            continue
+            found = get_linked_articles(page)
         except Exception as e:
-            print(f"Error: {e} — skipping")
+            print(f"error: {e}")
             time.sleep(1)
             continue
+        print(f"{len(found)} links")
+        all_titles |= found
+        time.sleep(0.2)
 
-        added = 0
-        for art in articles:
-            title = art["article"]
-            if title in SKIP_TITLES:
-                continue
-            if any(title.startswith(p) for p in SKIP_PREFIXES):
-                continue
-            view_totals[title] = view_totals.get(title, 0) + art.get("views", 0)
-            added += 1
+    return all_titles
 
-        print(f"{added} articles")
-        time.sleep(0.5)
 
-    sorted_articles = sorted(view_totals.items(), key=lambda x: x[1], reverse=True)
-    return [{"title": t, "total_views": v} for t, v in sorted_articles[:top_n]]
+def clean(titles: set[str]) -> list[str]:
+    return sorted(
+        t for t in titles
+        if t not in SKIP_EXACT and not SKIP_PREFIXES.match(t)
+    )
 
+
+# ── Wikipedia summary + image ─────────────────────────────────────────────────
 
 def fetch_wiki_summary(title: str) -> dict | None:
     encoded = requests.utils.quote(title, safe="")
@@ -76,72 +132,66 @@ def fetch_wiki_summary(title: str) -> dict | None:
     return resp.json()
 
 
-def download_image(url: str, dest: Path) -> bool:
-    try:
-        resp = requests.get(url, headers=HEADERS, timeout=30, stream=True)
-        resp.raise_for_status()
-        dest.write_bytes(resp.content)
-        return True
-    except Exception as e:
-        print(f"    Image download failed: {e}")
-        return False
 
-
-def main():
-    DATA_DIR.mkdir(exist_ok=True)
-    IMAGES_DIR.mkdir(exist_ok=True)
-
-    print("=== Step 1: Collecting top articles (en.wikipedia, 2025) ===")
-    top_articles = collect_top_articles(2025, top_n=1000)
-    print(f"\nFound {len(top_articles)} unique articles\n")
-
-    print("=== Step 2: Fetching summaries and downloading images ===")
+def enrich(titles: list[str], label: str) -> list[dict]:
     results = []
-
-    for i, art in enumerate(top_articles, 1):
-        title = art["title"]
-        print(f"[{i:04d}/{len(top_articles)}] {title}", end=" ... ", flush=True)
-
+    for i, title in enumerate(titles, 1):
+        print(f"[{i:05d}/{len(titles)}] {title}", end=" ... ", flush=True)
         try:
             summary = fetch_wiki_summary(title)
         except Exception as e:
             print(f"summary error: {e} — skipping")
             time.sleep(0.5)
             continue
-
         if not summary:
             print("no summary — skipping")
             continue
 
-        image_path = None
-        thumbnail = summary.get("thumbnail")
-        if thumbnail:
-            safe_name = re.sub(r"[^\w\-.]", "_", title)[:100] + ".jpg"
-            dest = IMAGES_DIR / safe_name
-            if not dest.exists():  # skip re-download on re-runs
-                download_image(thumbnail["source"], dest)
-            if dest.exists():
-                image_path = f"images/{safe_name}"
-
         results.append({
-            "title": summary.get("title", title),
+            "title":         summary.get("title", title),
             "display_title": summary.get("displaytitle", title),
-            "extract": summary.get("extract", ""),
-            "image": image_path,
-            "thumbnail_url": thumbnail["source"] if thumbnail else None,
-            "wiki_url": summary.get("content_urls", {}).get("desktop", {}).get("page", ""),
-            "total_views_2025": art["total_views"],
+            "extract":       summary.get("extract", ""),
+            "wiki_url":      summary.get("content_urls", {}).get("desktop", {}).get("page", ""),
+            "vital_level":   label,
         })
-
-        print("ok" if image_path else "ok (no image)")
+        print("ok")
         time.sleep(0.2)
 
-    print(f"\n=== Step 3: Writing {OUTPUT_FILE} ===")
-    OUTPUT_FILE.write_text(json.dumps(results, indent=2, ensure_ascii=False))
-    print(f"Saved {len(results)} articles.")
+    return results
 
-    total_bytes = sum(f.stat().st_size for f in IMAGES_DIR.iterdir() if f.is_file())
-    print(f"Image storage: {total_bytes / 1_000_000:.1f} MB")
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+def main():
+    DATA_DIR.mkdir(exist_ok=True)
+
+    # ── Level 3 (~1000 articles) ──────────────────────────────────────────────
+    print("=== Step 1: Collecting Vital Articles Level 3 ===")
+    l3_raw = collect_titles_from_prefix(
+        "Vital_articles/Level/3",
+        extra_pages=["Wikipedia:Vital_articles"],   # the main L3 hub page
+    )
+    l3_titles = clean(l3_raw)
+    print(f"\n→ {len(l3_titles)} unique L3 titles after filtering\n")
+
+    # ── Level 4 (~10 000 articles, L4-only) ───────────────────────────────────
+    print("=== Step 2: Collecting Vital Articles Level 4 ===")
+    l4_raw = collect_titles_from_prefix("Vital_articles/Level/4")
+    l4_titles = clean(l4_raw - l3_raw)   # exclude articles already in L3
+    print(f"\n→ {len(l4_titles)} unique L4-only titles after filtering\n")
+
+    # ── Enrich & save L3 ─────────────────────────────────────────────────────
+    print("=== Step 3: Enriching L3 articles ===")
+    l3_data = enrich(l3_titles, "3")
+    L3_FILE.write_text(json.dumps(l3_data, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"\nSaved {len(l3_data)} L3 articles → {L3_FILE}\n")
+
+    # ── Enrich & save L4 ─────────────────────────────────────────────────────
+    print("=== Step 4: Enriching L4 articles ===")
+    l4_data = enrich(l4_titles, "4")
+    L4_FILE.write_text(json.dumps(l4_data, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"\nSaved {len(l4_data)} L4 articles → {L4_FILE}\n")
+
 
 
 if __name__ == "__main__":

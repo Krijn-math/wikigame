@@ -1,0 +1,3 @@
+- mix vital articles with featured articles or most read articles
+- hard mode: 10 from level 4
+- riccardo mode: 10 from level 5

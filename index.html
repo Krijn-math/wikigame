@@ -914,11 +914,13 @@
   async function init() {
     const monthName = ['january','february','march','april','may','june',
                         'july','august','september','october','november','december'][MONTH - 1];
-    const [articlesResp, scheduleResp] = await Promise.all([
-      fetch('data/articles.json'),
+    const [l3Resp, l4Resp, scheduleResp] = await Promise.all([
+      fetch('data/vital_l3.json'),
+      fetch('data/vital_l4.json'),
       fetch(`data/schedule/${monthName}_${YEAR}_schedule.json?t=${Date.now()}`),
     ]);
-    articles = (await articlesResp.json()).filter(a => !/^lists? of\b/i.test(a.title));
+    const filter = a => !/^lists? of\b/i.test(a.title);
+    articles = [...(await l3Resp.json()), ...(await l4Resp.json())].filter(filter);
     schedule = await scheduleResp.json();
     document.getElementById('loading-overlay').style.display = 'none';
     showHome();
