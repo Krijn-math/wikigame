@@ -412,13 +412,10 @@
 
   const POINTS = [1000, 500, 200];
   const ARTICLES_PER_DAY = 10;
-  const MONTH = 3;   // March
-  const YEAR  = 2026;
-
-  const now = new Date();
-  const TODAY_DAY = (now.getFullYear() === YEAR && now.getMonth() + 1 === MONTH)
-    ? now.getDate()
-    : 28; // fallback for demo
+  const now   = new Date();
+  const MONTH = now.getMonth() + 1;
+  const YEAR  = now.getFullYear();
+  const TODAY_DAY = now.getDate();
 
   // ── State ──────────────────────────────────────────────────────────────────
 
@@ -920,7 +917,7 @@
                         'july','august','september','october','november','december'][MONTH - 1];
     const [articlesResp, scheduleResp] = await Promise.all([
       fetch('data/articles.json'),
-      fetch(`data/schedule/${monthName}_${YEAR}_schedule.json`),
+      fetch(`data/schedule/${monthName}_${YEAR}_schedule.json?t=${Date.now()}`),
     ]);
     articles = (await articlesResp.json()).filter(a => !/^lists? of\b/i.test(a.title));
     schedule = await scheduleResp.json();
