@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RiccardoFish</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Georgia, 'Times New Roman', serif;
+      background: #f6f6f0;
+      color: #222;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #fff;
+      border-bottom: 1px solid #ddd;
+      padding: 0.9rem 1.5rem;
+      position: relative;
+      text-align: center;
+    }
+
+    header h1 { font-size: 1.2rem; font-weight: bold; letter-spacing: 0.02em; display: inline; }
+
+    #btn-home { position: absolute; right: 1.5rem; top: 50%; transform: translateY(-50%); }
+
+    .container { max-width: 740px; margin: 0 auto; padding: 0 1.2rem; }
+
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    /* ── Home screen ── */
+
+    #screen-home .container { padding-top: 2rem; padding-bottom: 3rem; }
+
+    .hero-row {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .today-card, .random-card {
+      flex: 1;
+      color: #fff;
+      border-radius: 8px;
+      padding: 1.8rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .today-card  { background: #2a6496; }
+    .today-card:hover  { background: #1e4d73; }
+
+    .random-card { background: #b03030; }
+    .random-card:hover { background: #8a2222; }
+
+    .today-card .label, .random-card .label {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      opacity: 0.75;
+      margin-bottom: 0.4rem;
+    }
+
+    .today-card .day-title, .random-card .day-title { font-size: 1.4rem; font-weight: bold; margin-bottom: 0.5rem; }
+
+    .today-card .sub, .random-card .sub {
+      font-size: 0.9rem;
+      opacity: 0.8;
+    }
+
+    .today-card .played-score {
+      margin-top: 0.6rem;
+      font-size: 1rem;
+      font-weight: bold;
+      opacity: 0.95;
+    }
+
+    .past-heading {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #888;
+      margin-bottom: 0.9rem;
+    }
+
+    .days-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 0.5rem;
+    }
+
+    .day-cell {
+      aspect-ratio: 1;
+      border-radius: 6px;
+      border: 1px solid #ddd;
+      background: #fff;
+      position: relative;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .day-cell:hover { border-color: #2a6496; background: #f0f5fb; }
+
+    .day-cell .day-num {
+      font-size: 1rem;
+      font-weight: bold;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+    .day-cell.played-day { background: #f0f0ec; border-color: #e0e0da; }
+    .day-cell .day-num.played { color: #bbb; }
+
+    .day-cell .day-score {
+      font-size: 0.65rem;
+      color: #2a6496;
+      font-family: monospace;
+      position: absolute;
+      bottom: 0.3rem;
+      left: 0;
+      right: 0;
+      text-align: center;
+    }
+
+    .day-cell.future {
+      background: #f6f6f0;
+      color: #bbb;
+      cursor: default;
+      pointer-events: none;
+    }
+
+    .day-cell.future .day-num { color: #bbb; }
+
+    /* ── Game screen ── */
+
+    #screen-game .container { padding-top: 1.5rem; padding-bottom: 2rem; }
+
+    .game-progress {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      font-size: 0.85rem;
+      color: #666;
+      font-family: monospace;
+    }
+
+    .progress-dots { display: flex; gap: 5px; }
+
+    .progress-dots span {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #ddd;
+      display: inline-block;
+    }
+
+    .progress-dots span.done-correct { background: #28a745; }
+    .progress-dots span.done-wrong   { background: #dc3545; }
+    .progress-dots span.done-skip    { background: #ffc107; }
+    .progress-dots span.current      { background: #2a6496; }
+
+    .card {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 1.8rem;
+    }
+
+    .article-image { float: right; margin: 0 0 1rem 1.5rem; width: 180px; }
+    .article-image img { width: 100%; border-radius: 4px; display: block; }
+
+    .extract { font-size: 1.05rem; line-height: 1.75; margin-bottom: 1.4rem; }
+
+    .redacted {
+      background: #222;
+      color: #222;
+      border-radius: 2px;
+      letter-spacing: -1px;
+      user-select: none;
+      cursor: default;
+    }
+
+    .clearfix::after { content: ''; display: table; clear: both; }
+
+    .blurred-title {
+      font-size: 1.35rem;
+      font-weight: bold;
+      filter: blur(7px);
+      user-select: none;
+      cursor: default;
+      margin-bottom: 1.1rem;
+      line-height: 1.3;
+    }
+
+    .hint-text { font-size: 0.85rem; color: #888; font-family: monospace; margin-bottom: 1rem; }
+
+    .second-para {
+      font-size: 1.05rem;
+      line-height: 1.75;
+      margin-bottom: 1.4rem;
+    }
+
+    /* Wikipedia infobox — rendered from real Wikipedia HTML */
+    table.infobox {
+      float: right;
+      clear: right;
+      margin: 0 0 1rem 1.5rem;
+      width: 22em;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      border: 1px solid #a2a9b1;
+      background: #f8f9fa;
+      border-spacing: 3px;
+    }
+
+    table.infobox td, table.infobox th {
+      vertical-align: top;
+      padding: 0.2em 0.6em;
+    }
+
+    table.infobox .infobox-above,
+    table.infobox .infobox-subheader {
+      text-align: center;
+      font-size: 1.1em;
+      font-weight: bold;
+      background: #cee0f2;
+      padding: 0.35em;
+      filter: blur(5px);
+      user-select: none;
+      cursor: default;
+    }
+
+    table.infobox .infobox-image {
+      text-align: center;
+      padding: 0.4em 0;
+    }
+
+    table.infobox .infobox-image img {
+      max-width: 100%;
+      height: auto;
+    }
+
+    table.infobox .infobox-caption {
+      font-size: 0.88em;
+      color: #555;
+      margin-top: 0.25em;
+    }
+
+    table.infobox .infobox-label {
+      font-weight: bold;
+      white-space: nowrap;
+      padding-right: 0.8em;
+    }
+
+    table.infobox .infobox-header {
+      text-align: center;
+      font-weight: bold;
+      background: #eaecf0;
+      padding: 0.25em;
+    }
+
+    table.infobox .infobox-full-data {
+      text-align: center;
+    }
+
+
+    .guess-meta { font-size: 0.85rem; color: #666; margin-bottom: 0.5rem; font-family: monospace; }
+    .guess-meta .pts { color: #2a6496; font-weight: bold; }
+
+    .guess-row { display: flex; gap: 0.5rem; margin-bottom: 0.8rem; }
+
+    input[type="text"] {
+      flex: 1;
+      padding: 0.6rem 0.85rem;
+      font-size: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-family: Georgia, serif;
+      outline: none;
+    }
+
+    input[type="text"]:focus { border-color: #2a6496; }
+
+    button {
+      padding: 0.6rem 1.1rem;
+      font-size: 0.95rem;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: Georgia, serif;
+    }
+
+    .btn-primary { background: #2a6496; color: #fff; }
+    .btn-primary:hover { background: #1e4d73; }
+    .btn-secondary { background: #e0e0e0; color: #444; }
+    .btn-secondary:hover { background: #ccc; }
+    button:disabled { opacity: 0.5; cursor: default; pointer-events: none; }
+
+    .feedback {
+      padding: 0.75rem 1rem;
+      border-radius: 4px;
+      margin-bottom: 0.8rem;
+      font-size: 0.95rem;
+    }
+
+    .feedback.correct   { background: #d4edda; color: #155724; }
+    .feedback.wrong     { background: #f8d7da; color: #721c24; }
+    .feedback.skipped   { background: #fff3cd; color: #856404; }
+    .feedback.try-again { background: #fff3cd; color: #856404; }
+
+    .pts-earned { font-weight: bold; }
+
+    .post-actions { display: flex; align-items: center; gap: 1rem; margin-top: 0.8rem; }
+
+    .wiki-link { font-size: 0.85rem; color: #2a6496; text-decoration: none; }
+    .wiki-link:hover { text-decoration: underline; }
+
+    /* ── Results screen ── */
+
+    #screen-results .container { padding-top: 2rem; padding-bottom: 3rem; }
+
+    .results-header { margin-bottom: 1.5rem; }
+    .results-header h2 { font-size: 1.4rem; margin-bottom: 0.3rem; }
+    .results-header .total { font-size: 2rem; font-weight: bold; color: #2a6496; }
+
+    .results-list { list-style: none; margin-bottom: 2rem; }
+
+    .results-list li {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 0.6rem 0;
+      border-bottom: 1px solid #eee;
+      font-size: 0.95rem;
+      gap: 1rem;
+    }
+
+    .results-list li .art-title { flex: 1; color: #333; }
+
+    .results-list li .art-pts {
+      font-family: monospace;
+      font-weight: bold;
+      min-width: 60px;
+      text-align: right;
+    }
+
+    .art-pts.pts-1000 { color: #155724; }
+    .art-pts.pts-500  { color: #2a6496; }
+    .art-pts.pts-200  { color: #856404; }
+    .art-pts.pts-0    { color: #999; }
+
+    #loading { text-align: center; color: #888; padding: 3rem; font-size: 1.1rem; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>RiccardoFish</h1>
+  <button class="btn-secondary" id="btn-home" onclick="showHome()" style="display:none;font-size:0.85rem;padding:0.4rem 0.8rem;">← Home</button>
+</header>
+
+<div id="loading-overlay" style="text-align:center;color:#888;padding:4rem;font-size:1.1rem;">Loading articles…</div>
+
+<!-- HOME -->
+<div id="screen-home" class="screen">
+  <div class="container">
+    <div class="hero-row">
+      <div id="today-card" class="today-card" onclick="playDay(TODAY_DAY)"></div>
+      <div class="random-card" onclick="playRandomDay()">
+        <div class="label">Random Day</div>
+        <div class="day-title">Surprise me</div>
+        <div class="sub">Pick a random past day</div>
+      </div>
+    </div>
+    <div class="past-heading">Past Days</div>
+    <div id="days-grid" class="days-grid"></div>
+  </div>
+</div>
+
+<!-- GAME -->
+<div id="screen-game" class="screen">
+  <div class="container">
+    <div class="game-progress">
+      <span id="progress-label"></span>
+      <div id="progress-dots" class="progress-dots"></div>
+    </div>
+    <div class="card">
+      <div id="game"></div>
+    </div>
+  </div>
+</div>
+
+<!-- RESULTS -->
+<div id="screen-results" class="screen">
+  <div class="container">
+    <div class="results-header">
+      <h2 id="results-title"></h2>
+      <div class="total" id="results-total"></div>
+    </div>
+    <ul id="results-list" class="results-list"></ul>
+    <button class="btn-primary" onclick="showHome()">← Back to Home</button>
+  </div>
+</div>
+
+<script>
+  // ── Constants ──────────────────────────────────────────────────────────────
+
+  const POINTS = [1000, 500, 200];
+  const ARTICLES_PER_DAY = 10;
+  const MONTH = 3;   // March
+  const YEAR  = 2026;
+
+  const now = new Date();
+  const TODAY_DAY = (now.getFullYear() === YEAR && now.getMonth() + 1 === MONTH)
+    ? now.getDate()
+    : 28; // fallback for demo
+
+  // ── State ──────────────────────────────────────────────────────────────────
+
+  let articles      = [];
+  let schedule      = {};   // { "1": [...titles], "2": [...], ... }
+  let selectedDay   = null;
+  let gameArticles  = [];
+  let articleIndex  = 0;
+  let guessNumber   = 1;
+  let articleScores = []; // [{title, points, outcome}]
+  let secondParaCache = null;
+
+  // ── Storage ────────────────────────────────────────────────────────────────
+
+  function storageKey(day) {
+    return `wikigame_${YEAR}_${String(MONTH).padStart(2,'0')}_${String(day).padStart(2,'0')}`;
+  }
+
+  function saveScore(day, scores) {
+    const total = scores.reduce((s, r) => s + r.points, 0);
+    localStorage.setItem(storageKey(day), JSON.stringify({ total, scores }));
+  }
+
+  function loadScore(day) {
+    const raw = localStorage.getItem(storageKey(day));
+    return raw ? JSON.parse(raw) : null;
+  }
+
+  // ── Seeded RNG + shuffle ───────────────────────────────────────────────────
+
+  function getArticlesForDay(day) {
+    const titles     = schedule[String(day)] ?? [];
+    const articleMap = Object.fromEntries(articles.map(a => [a.title, a]));
+    return titles.map(t => articleMap[t]).filter(Boolean);
+  }
+
+  // ── Title / censor helpers ─────────────────────────────────────────────────
+
+  function titleVariants(title) {
+    const variants = new Set([title]);
+    const noParens = title.replace(/\s*\([^)]+\)\s*$/, '').trim();
+    if (noParens) variants.add(noParens);
+    const noYear = title.replace(/^\d{4}\s+/, '').trim();
+    if (noYear) variants.add(noYear);
+    const noYearNoParens = noYear.replace(/\s*\([^)]+\)\s*$/, '').trim();
+    if (noYearNoParens) variants.add(noYearNoParens);
+    return [...variants].sort((a, b) => b.length - a.length);
+  }
+
+  function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+  const STOP_WORDS = new Set([
+    'a','an','the','and','or','of','in','on','at','to','for',
+    'by','with','from','is','was','are','were','be','been','as',
+    'it','its','that','this','which','who','also','known',
+  ]);
+
+  function censorExtract(extract, title) {
+    const phrases = titleVariants(title);
+    const words = title.split(/[\s\-_]+/).filter(w => {
+      const c = w.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      return c.length >= 3 && !STOP_WORDS.has(c);
+    });
+    const toRedact = [...phrases, ...words].sort((a, b) => b.length - a.length);
+
+    let result = extract;
+    for (const v of toRedact) {
+      if (v.length < 3) continue;
+      const re = new RegExp(`(?<![\\w])${escapeRegex(v)}(?![\\w])`, 'gi');
+      result = result.replace(re, m => `<span class="redacted">${'█'.repeat(m.length)}</span>`);
+    }
+    return result;
+  }
+
+  // ── Hint extraction ────────────────────────────────────────────────────────
+
+  function getHint(article) {
+    const text = article.extract;
+    const bornMatch = text.match(/\bborn\b[^.()\n]{0,40}?(\d{4})/i);
+    if (bornMatch) return { label: 'Born', value: bornMatch[1] };
+
+    const lifeMatch = text.match(/\((\d{4})\s*[–\-]\s*(\d{4})\)/);
+    if (lifeMatch) return { label: 'Lived', value: `${lifeMatch[1]}–${lifeMatch[2]}` };
+
+    const mediaMatch = text.match(/\bis (?:a|an) (\d{4})\b/i);
+    if (mediaMatch) return { label: 'Year', value: mediaMatch[1] };
+
+    const placeMatch = text.match(
+      /\b(?:country|island|city|municipality|town|village|state|province|region|territory)\b[^.]{0,20}?\bin ([A-Z][^,.;(]{2,35})/
+    );
+    if (placeMatch) return { label: 'Located in', value: placeMatch[1].trim() };
+
+    const foundedMatch = text.match(/\bfounded\b[^.]*?(\d{4})/i);
+    if (foundedMatch) return { label: 'Founded', value: foundedMatch[1] };
+
+    return null;
+  }
+
+  // ── Fuzzy matching ─────────────────────────────────────────────────────────
+
+  function normalize(s) {
+    return s.toLowerCase()
+      .replace(/[''`]/g, "'")
+      .replace(/[^a-z0-9\s]/g, '')
+      .replace(/\b(the|a|an)\b/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function levenshtein(a, b) {
+    const m = a.length, n = b.length;
+    const dp = Array.from({ length: m + 1 }, (_, i) => {
+      const row = [i];
+      for (let j = 1; j <= n; j++) row[j] = i === 0 ? j : 0;
+      return row;
+    });
+    for (let i = 1; i <= m; i++)
+      for (let j = 1; j <= n; j++)
+        dp[i][j] = a[i-1] === b[j-1]
+          ? dp[i-1][j-1]
+          : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+    return dp[m][n];
+  }
+
+  function isMatch(guess, title) {
+    const ng = normalize(guess);
+    if (!ng) return false;
+    for (const v of titleVariants(title)) {
+      const nv = normalize(v);
+      if (ng === nv) return true;
+      const threshold = Math.max(1, Math.floor(Math.max(ng.length, nv.length) * 0.2));
+      if (levenshtein(ng, nv) <= threshold) return true;
+    }
+    return false;
+  }
+
+  // ── Screen management ──────────────────────────────────────────────────────
+
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    document.getElementById('btn-home').style.display = id === 'screen-home' ? 'none' : '';
+  }
+
+  function showHome() {
+    renderHome();
+    showScreen('screen-home');
+  }
+
+  // ── Home screen ────────────────────────────────────────────────────────────
+
+  function monthName(m) {
+    return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m-1];
+  }
+
+  function renderHome() {
+    // Today card
+    const todaySaved = loadScore(TODAY_DAY);
+    const card = document.getElementById('today-card');
+    card.innerHTML = `
+      <div class="label">Daily Game</div>
+      <div class="day-title">${monthName(MONTH)} ${TODAY_DAY}</div>
+      <div class="sub">10 articles · up to 10,000 pts</div>
+      ${todaySaved ? `<div class="played-score">Your score: ${todaySaved.total.toLocaleString()} pts — play again?</div>` : ''}
+    `;
+
+    // Past days grid
+    const grid = document.getElementById('days-grid');
+    grid.innerHTML = '';
+    const daysInMonth = new Date(YEAR, MONTH, 0).getDate();
+    for (let d = 1; d <= daysInMonth; d++) {
+      const cell = document.createElement('div');
+      cell.className = 'day-cell';
+      const saved = loadScore(d);
+      if (d > TODAY_DAY) {
+        cell.classList.add('future');
+        cell.innerHTML = `<span class="day-num">${d}</span>`;
+      } else if (d === TODAY_DAY) {
+        // Today is the featured card; still include it in the grid as a marker
+        cell.classList.add('future'); // same muted style
+        cell.innerHTML = `<span class="day-num" style="color:#2a6496">${d}</span>`;
+      } else {
+        if (saved) cell.classList.add('played-day');
+        cell.onclick = () => playDay(d);
+        cell.innerHTML = `
+          <span class="day-num ${saved ? 'played' : ''}">${d}</span>
+          <span class="day-score">${saved ? saved.total.toLocaleString() : ''}</span>
+        `;
+      }
+      grid.appendChild(cell);
+    }
+  }
+
+  // ── Game flow ──────────────────────────────────────────────────────────────
+
+  function playRandomDay() {
+    const pastDays = Array.from({ length: TODAY_DAY - 1 }, (_, i) => i + 1)
+      .filter(d => !loadScore(d));
+    const pool = pastDays.length ? pastDays
+      : Array.from({ length: TODAY_DAY - 1 }, (_, i) => i + 1); // fallback: all past days if all played
+    const day = pool[Math.floor(Math.random() * pool.length)];
+    playDay(day);
+  }
+
+  function playDay(day) {
+    selectedDay   = day;
+    gameArticles  = getArticlesForDay(day);
+    articleIndex  = 0;
+    articleScores = [];
+    showScreen('screen-game');
+    startArticle();
+  }
+
+  function startArticle() {
+    guessNumber = 1;
+    secondParaCache = null;
+    renderProgressBar();
+    renderArticle();
+  }
+
+  function renderProgressBar() {
+    const total = ARTICLES_PER_DAY;
+    document.getElementById('progress-label').textContent =
+      `${monthName(MONTH)} ${selectedDay} — Article ${articleIndex + 1} of ${total}`;
+
+    const dots = document.getElementById('progress-dots');
+    dots.innerHTML = '';
+    for (let i = 0; i < total; i++) {
+      const s = document.createElement('span');
+      if (i < articleIndex) {
+        const outcome = articleScores[i]?.outcome ?? 'wrong';
+        s.className = `done-${outcome}`;
+      } else if (i === articleIndex) {
+        s.className = 'current';
+      }
+      dots.appendChild(s);
+    }
+  }
+
+  function renderArticle() {
+    const art = gameArticles[articleIndex];
+    const { title, extract } = art;
+    const censored = censorExtract(extract, title);
+    const words = title.trim().split(/\s+/).length;
+    const chars = title.replace(/\s/g, '').length;
+    const pts   = POINTS[guessNumber - 1];
+
+    document.getElementById('game').innerHTML = `
+      <div id="infobox-slot"></div>
+      <div class="blurred-title">${art.title}</div>
+      <div class="extract">${censored}</div>
+      <div id="second-para"></div>
+      <div style="clear:both"></div>
+      <div class="hint-text">${words} word${words !== 1 ? 's' : ''} · ${chars} letters (excl. spaces)</div>
+      <div id="guess-meta" class="guess-meta">Guess ${guessNumber} of 3 — worth <span class="pts">${pts} pts</span></div>
+      <div id="inline-feedback"></div>
+      <div class="guess-row">
+        <input type="text" id="guess-input" placeholder="Guess the article title…" autocomplete="off" spellcheck="false">
+        <button class="btn-primary"  id="btn-guess" onclick="submitGuess()">Guess</button>
+        <button class="btn-secondary" id="btn-skip"  onclick="skipArticle()">Skip</button>
+      </div>
+      <div id="end-feedback"></div>
+    `;
+
+    const input = document.getElementById('guess-input');
+    input.focus();
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') submitGuess(); });
+  }
+
+  function submitGuess() {
+    const input = document.getElementById('guess-input');
+    const guess = input.value.trim();
+    if (!guess) return;
+
+    const art = gameArticles[articleIndex];
+
+    if (isMatch(guess, art.title)) {
+      const pts = POINTS[guessNumber - 1];
+      endArticle('correct', pts,
+        `Correct! The answer is <strong>${art.title}</strong>. <span class="pts-earned">+${pts} pts</span>`
+      );
+      return;
+    }
+
+    input.value = '';
+
+    if (guessNumber >= 3) {
+      endArticle('wrong', 0,
+        `The answer was <strong>${art.title}</strong>. <span class="pts-earned">+0 pts</span>`
+      );
+      return;
+    }
+
+    guessNumber++;
+    const pts = POINTS[guessNumber - 1];
+
+    document.getElementById('inline-feedback').innerHTML =
+      `<div class="feedback try-again">Not quite — try again!</div>`;
+    document.getElementById('guess-meta').innerHTML =
+      `Guess ${guessNumber} of 3 — worth <span class="pts">${pts} pts</span>`;
+
+    if (guessNumber === 2) revealSecondParagraph();
+    if (guessNumber === 3) revealInfobox();
+
+    input.focus();
+  }
+
+  function skipArticle() {
+    const art = gameArticles[articleIndex];
+    endArticle('skip', 0,
+      `Skipped. The answer was <strong>${art.title}</strong>. <span class="pts-earned">+0 pts</span>`
+    );
+  }
+
+  async function fetchSecondParagraph(title) {
+    try {
+      const url = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=1&titles=${encodeURIComponent(title)}&format=json&origin=*`;
+      const data = await (await fetch(url)).json();
+      const pages = data.query.pages;
+      const page  = pages[Object.keys(pages)[0]];
+      if (!page?.extract) return null;
+      const div   = document.createElement('div');
+      div.innerHTML = page.extract;
+      const paras = [...div.querySelectorAll('p')].filter(p => p.textContent.trim().length > 60);
+      return paras[1]?.textContent || null;
+    } catch { return null; }
+  }
+
+  async function revealSecondParagraph() {
+    const art  = gameArticles[articleIndex];
+    const slot = document.getElementById('second-para');
+    if (!slot) return;
+    slot.innerHTML = `<div class="second-para" style="color:#aaa">Loading additional context…</div>`;
+    const para = secondParaCache ?? await fetchSecondParagraph(art.title);
+    secondParaCache = para;
+    slot.innerHTML = para
+      ? `<div class="second-para">${censorExtract(para, art.title)}</div>`
+      : '';
+  }
+
+  function censorDOMText(root, title) {
+    const toRedact = [
+      ...titleVariants(title),
+      ...title.split(/[\s\-_]+/).filter(w => {
+        const c = w.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        return c.length >= 3 && !STOP_WORDS.has(c);
+      }),
+    ].sort((a, b) => b.length - a.length);
+
+    function censorString(s) {
+      for (const v of toRedact) {
+        if (v.length < 3) continue;
+        const re = new RegExp(`(?<![\\w])${escapeRegex(v)}(?![\\w])`, 'gi');
+        s = s.replace(re, m => '█'.repeat(m.length));
+      }
+      return s;
+    }
+
+    function walk(node) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        node.textContent = censorString(node.textContent);
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        if (node.classList.contains('infobox-above')) return; // already blurred by CSS
+        for (const attr of ['alt', 'title', 'aria-label']) {
+          if (node.hasAttribute(attr))
+            node.setAttribute(attr, censorString(node.getAttribute(attr)));
+        }
+        for (const child of [...node.childNodes]) walk(child);
+      }
+    }
+    walk(root);
+  }
+
+  async function fetchWikipediaInfobox(title) {
+    const url = `https://en.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(title)}&prop=text&section=0&format=json&origin=*`;
+    const data = await (await fetch(url)).json();
+    const html = data?.parse?.text?.['*'];
+    if (!html) return null;
+
+    const div = document.createElement('div');
+    div.innerHTML = html;
+
+    const table = div.querySelector('table.infobox');
+    if (!table) return null;
+
+    table.querySelectorAll('.mw-editsection, .reference, .noprint, style').forEach(el => el.remove());
+
+    table.querySelectorAll('img').forEach(img => {
+      const src = img.getAttribute('src') || '';
+      if (src.startsWith('//')) img.src = 'https:' + src;
+    });
+
+    // Strip all links — replace each <a> with its text content
+    table.querySelectorAll('a').forEach(a => {
+      const text = a.textContent.trim();
+      const isUrl = /^https?:\/\/|^\w[\w.-]*\.\w{2,}(\/|$)/.test(text);
+      a.replaceWith(document.createTextNode(isUrl ? '[website]' : text));
+    });
+
+    return table;
+  }
+
+  async function revealInfobox() {
+    revealSecondParagraph();
+
+    const art  = gameArticles[articleIndex];
+    const slot = document.getElementById('infobox-slot');
+    if (!slot) return;
+
+    slot.innerHTML = `<div style="float:right;color:#aaa;font-size:0.8rem;margin:0 0 0.5rem 1rem">Loading infobox…</div>`;
+
+    const table = await fetchWikipediaInfobox(art.title);
+    if (!table) { slot.innerHTML = ''; return; }
+
+    censorDOMText(table, art.title);
+
+    slot.innerHTML = '';
+    slot.appendChild(table);
+  }
+
+  function endArticle(outcome, points, message) {
+    const art = gameArticles[articleIndex];
+
+    const onEnter = (e) => {
+      if (e.key === 'Enter') { document.removeEventListener('keydown', onEnter); nextArticle(); }
+    };
+    document.addEventListener('keydown', onEnter);
+
+    ['guess-input','btn-guess','btn-skip'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = true;
+    });
+
+    if (outcome === 'wrong') revealInfobox();
+
+    // Unblur title and uncensor text
+    const titleEl = document.querySelector('.blurred-title');
+    if (titleEl) titleEl.style.filter = 'none';
+
+    const extractEl = document.querySelector('.extract');
+    if (extractEl) extractEl.innerHTML = art.extract;
+
+    const paraEl = document.getElementById('second-para');
+    if (paraEl && secondParaCache) paraEl.innerHTML = `<div class="second-para">${secondParaCache}</div>`;
+
+    articleScores.push({ title: art.title, points, outcome });
+
+    document.getElementById('inline-feedback').innerHTML = '';
+    document.getElementById('end-feedback').innerHTML = `
+      <div class="feedback ${outcome === 'correct' ? 'correct' : outcome === 'skip' ? 'skipped' : 'wrong'}">${message}</div>
+      <div class="post-actions">
+        <button class="btn-primary" onclick="nextArticle()">
+          ${articleIndex + 1 < ARTICLES_PER_DAY ? 'Next article →' : 'See results →'}
+        </button>
+        ${art.wiki_url ? `<a class="wiki-link" href="${art.wiki_url}" target="_blank">Wikipedia ↗</a>` : ''}
+      </div>
+    `;
+  }
+
+  function nextArticle() {
+    articleIndex++;
+    if (articleIndex >= ARTICLES_PER_DAY) {
+      finishDay();
+    } else {
+      startArticle();
+    }
+  }
+
+  // ── Results ────────────────────────────────────────────────────────────────
+
+  function finishDay() {
+    saveScore(selectedDay, articleScores);
+    renderResults();
+    showScreen('screen-results');
+  }
+
+  function renderResults() {
+    const total = articleScores.reduce((s, r) => s + r.points, 0);
+
+    document.getElementById('results-title').textContent =
+      `${monthName(MONTH)} ${selectedDay} — Results`;
+    document.getElementById('results-total').textContent =
+      `${total.toLocaleString()} pts`;
+
+    const list = document.getElementById('results-list');
+    list.innerHTML = articleScores.map((r, i) => {
+      const cls = `pts-${r.points}`;
+      return `<li>
+        <span class="art-title">${i + 1}. ${r.title}</span>
+        <span class="art-pts ${cls}">${r.points > 0 ? '+' : ''}${r.points}</span>
+      </li>`;
+    }).join('');
+  }
+
+  // ── Init ───────────────────────────────────────────────────────────────────
+
+  async function init() {
+    const monthName = ['january','february','march','april','may','june',
+                        'july','august','september','october','november','december'][MONTH - 1];
+    const [articlesResp, scheduleResp] = await Promise.all([
+      fetch('data/articles.json'),
+      fetch(`data/schedule/${monthName}_${YEAR}_schedule.json`),
+    ]);
+    articles = (await articlesResp.json()).filter(a => !/^lists? of\b/i.test(a.title));
+    schedule = await scheduleResp.json();
+    document.getElementById('loading-overlay').style.display = 'none';
+    showHome();
+  }
+
+  init();
+</script>
+</body>
+</html>
