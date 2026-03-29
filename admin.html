@@ -260,6 +260,23 @@
 
     .alt-btn:hover { background: #d8eaf8; border-color: #2a6496; }
 
+    .alt-btn.l3 { background: #f0faf2; color: #276b3a; border-color: #a8d8b0; }
+    .alt-btn.l3:hover { background: #d0f0d8; border-color: #276b3a; }
+    .alt-btn.l4 { background: #fff8f0; color: #a05000; border-color: #e8c090; }
+    .alt-btn.l4:hover { background: #ffe8c8; border-color: #a05000; }
+
+    .level-badge {
+      font-size: 0.65rem;
+      font-family: monospace;
+      font-weight: bold;
+      padding: 0.1rem 0.35rem;
+      border-radius: 3px;
+      letter-spacing: 0.05em;
+      flex-shrink: 0;
+    }
+    .level-badge.l3 { background: #d0f0d8; color: #276b3a; }
+    .level-badge.l4 { background: #ffe8c8; color: #a05000; }
+
     .refreshing { color: #aaa; font-size: 0.85rem; font-style: italic; }
   </style>
 </head>
@@ -317,8 +334,16 @@
   // ── Config ─────────────────────────────────────────────────────────────────
 
   const AVAILABLE_MONTHS = [
-    { year: 2026, month: 3,  label: 'March 2026',  file: 'march_2026_schedule.json'  },
-    { year: 2026, month: 4,  label: 'April 2026',  file: 'april_2026_schedule.json'  },
+    { year: 2026, month: 3,  label: 'March 2026',     file: 'march_2026_schedule.json'     },
+    { year: 2026, month: 4,  label: 'April 2026',     file: 'april_2026_schedule.json'     },
+    { year: 2026, month: 5,  label: 'May 2026',       file: 'may_2026_schedule.json'       },
+    { year: 2026, month: 6,  label: 'June 2026',      file: 'june_2026_schedule.json'      },
+    { year: 2026, month: 7,  label: 'July 2026',      file: 'july_2026_schedule.json'      },
+    { year: 2026, month: 8,  label: 'August 2026',    file: 'august_2026_schedule.json'    },
+    { year: 2026, month: 9,  label: 'September 2026', file: 'september_2026_schedule.json' },
+    { year: 2026, month: 10, label: 'October 2026',   file: 'october_2026_schedule.json'   },
+    { year: 2026, month: 11, label: 'November 2026',  file: 'november_2026_schedule.json'  },
+    { year: 2026, month: 12, label: 'December 2026',  file: 'december_2026_schedule.json'  },
   ];
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -382,13 +407,17 @@
     btn.textContent = 'Loading…';
 
     try {
-      const resp = await fetch('data/articles.json');
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      articlesPool = await resp.json();
-      articlesPool = articlesPool.filter(a => !/^lists? of\b/i.test(a.title));
+      const [l3Resp, l4Resp] = await Promise.all([
+        fetch('data/vital_l3.json'),
+        fetch('data/vital_l4.json'),
+      ]);
+      if (!l3Resp.ok) throw new Error(`vital_l3.json HTTP ${l3Resp.status}`);
+      if (!l4Resp.ok) throw new Error(`vital_l4.json HTTP ${l4Resp.status}`);
+      const filter = a => !/^lists? of\b/i.test(a.title);
+      articlesPool = [...(await l3Resp.json()), ...(await l4Resp.json())].filter(filter);
       articlesByTitle = Object.fromEntries(articlesPool.map(a => [a.title, a]));
     } catch (e) {
-      errEl.textContent = 'Failed to load articles.json: ' + e.message;
+      errEl.textContent = 'Failed to load articles: ' + e.message;
       errEl.style.display = '';
       btn.disabled = false;
       btn.textContent = 'Log in';
@@ -527,20 +556,23 @@
     li.id = `slot-${slotIndex}`;
 
     const art = articlesByTitle[title];
-    const imgHtml = art?.thumbnail_url
-      ? `<img src="${art.thumbnail_url}" alt="" onerror="this.style.display='none'">`
+    const level = art?.vital_level;
+    const badgeHtml = level
+      ? `<span class="level-badge l${level}">L${level}</span>`
       : '';
 
     li.innerHTML = `
       <div class="slot-num">Article ${slotIndex + 1}</div>
-      <div class="slot-current">${imgHtml}<span>${escapeHtml(title)}</span></div>
+      <div class="slot-current">${badgeHtml}<span>${escapeHtml(title)}</span></div>
       <div class="slot-alts"></div>
     `;
 
     const altsDiv = li.querySelector('.slot-alts');
     alts.forEach(t => {
+      const altArt = articlesByTitle[t];
+      const altLevel = altArt?.vital_level;
       const btn = document.createElement('button');
-      btn.className = 'alt-btn';
+      btn.className = `alt-btn${altLevel ? ' l' + altLevel : ''}`;
       btn.title = t;
       btn.textContent = t;
       btn.addEventListener('click', () => swapArticle(slotIndex, t));
