@@ -661,14 +661,14 @@
     const overlay = document.getElementById('loading-overlay');
 
     if (!l5Articles) {
-      overlay.textContent = 'Loading Ultra Mode…';
+      overlay.textContent = 'Loading Riccardo Mode…';
       overlay.style.display = '';
       try {
         const resp = await fetch('data/vital_l5.json');
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         l5Articles = await resp.json();
       } catch (e) {
-        overlay.textContent = 'Ultra Mode unavailable: ' + e.message;
+        overlay.textContent = 'Riccardo Mode unavailable: ' + e.message;
         setTimeout(() => { overlay.style.display = 'none'; }, 3000);
         return;
       }
@@ -712,7 +712,7 @@
   function renderProgressBar() {
     const total = gameArticles.length;
     document.getElementById('progress-label').textContent = isUltraMode
-      ? `Ultra Mode — Article ${articleIndex + 1} of ${total}`
+      ? `Riccardo Mode — Article ${articleIndex + 1} of ${total}`
       : `${monthName(MONTH)} ${selectedDay} — Article ${articleIndex + 1} of ${total}`;
 
     const dots = document.getElementById('progress-dots');
@@ -971,7 +971,7 @@
     const total = articleScores.reduce((s, r) => s + r.points, 0);
 
     document.getElementById('results-title').textContent = isUltraMode
-      ? 'Ultra Mode — Results'
+      ? 'Riccardo Mode — Results'
       : `${monthName(MONTH)} ${selectedDay} — Results`;
     document.getElementById('results-total').textContent =
       `${total.toLocaleString()} pts`;
