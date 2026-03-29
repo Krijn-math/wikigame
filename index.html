@@ -22,7 +22,7 @@
       text-align: center;
     }
 
-    header h1 { font-size: 1.2rem; font-weight: bold; letter-spacing: 0.02em; display: inline; }
+    header h1 { font-size: 1.2rem; font-weight: bold; letter-spacing: 0.02em; display: inline; cursor: pointer; user-select: none; }
 
     #btn-home { position: absolute; right: 1.5rem; top: 50%; transform: translateY(-50%); }
 
@@ -435,6 +435,8 @@
   let articleScores = []; // [{title, points, outcome}]
   let secondParaCache = null;
   let gameState     = 'idle'; // 'guessing' | 'revealed'
+  let isUltraMode   = false;
+  let l5Articles    = null;  // lazy-loaded on first Ultra trigger
 
   // ── Storage ────────────────────────────────────────────────────────────────
 
@@ -653,6 +655,43 @@
     playDay(day);
   }
 
+  // ── Ultra Mode (easter egg — click the title) ───────────────────────────────
+
+  document.querySelector('header h1').addEventListener('click', async () => {
+    const overlay = document.getElementById('loading-overlay');
+
+    if (!l5Articles) {
+      overlay.textContent = 'Loading Ultra Mode…';
+      overlay.style.display = '';
+      try {
+        const resp = await fetch('data/vital_l5.json');
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        l5Articles = await resp.json();
+      } catch (e) {
+        overlay.textContent = 'Ultra Mode unavailable: ' + e.message;
+        setTimeout(() => { overlay.style.display = 'none'; }, 3000);
+        return;
+      }
+      overlay.style.display = 'none';
+    }
+
+    // Sample 10 random L5 articles (Fisher-Yates partial shuffle)
+    const pool = l5Articles.slice();
+    const sample = [];
+    for (let i = 0; i < 10 && pool.length > 0; i++) {
+      const j = Math.floor(Math.random() * pool.length);
+      sample.push(pool.splice(j, 1)[0]);
+    }
+
+    isUltraMode   = true;
+    selectedDay   = null;
+    gameArticles  = sample;
+    articleIndex  = 0;
+    articleScores = [];
+    showScreen('screen-game');
+    startArticle();
+  });
+
   function playDay(day) {
     selectedDay   = day;
     gameArticles  = getArticlesForDay(day);
@@ -672,8 +711,9 @@
 
   function renderProgressBar() {
     const total = gameArticles.length;
-    document.getElementById('progress-label').textContent =
-      `${monthName(MONTH)} ${selectedDay} — Article ${articleIndex + 1} of ${total}`;
+    document.getElementById('progress-label').textContent = isUltraMode
+      ? `Ultra Mode — Article ${articleIndex + 1} of ${total}`
+      : `${monthName(MONTH)} ${selectedDay} — Article ${articleIndex + 1} of ${total}`;
 
     const dots = document.getElementById('progress-dots');
     dots.innerHTML = '';
@@ -921,16 +961,18 @@
   // ── Results ────────────────────────────────────────────────────────────────
 
   function finishDay() {
-    saveScore(selectedDay, articleScores);
+    if (!isUltraMode) saveScore(selectedDay, articleScores);
     renderResults();
     showScreen('screen-results');
+    isUltraMode = false;
   }
 
   function renderResults() {
     const total = articleScores.reduce((s, r) => s + r.points, 0);
 
-    document.getElementById('results-title').textContent =
-      `${monthName(MONTH)} ${selectedDay} — Results`;
+    document.getElementById('results-title').textContent = isUltraMode
+      ? 'Ultra Mode — Results'
+      : `${monthName(MONTH)} ${selectedDay} — Results`;
     document.getElementById('results-total').textContent =
       `${total.toLocaleString()} pts`;
 
