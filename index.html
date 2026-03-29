@@ -526,7 +526,7 @@
     let result = extract;
     for (const v of toRedact) {
       if (v.length < 3) continue;
-      const re = new RegExp(`(?<![\\w])${escapeRegex(v)}(?![\\w])`, 'gi');
+      const re = new RegExp(`(?<![\\w])${escapeRegex(v)}\\w*`, 'gi');
       result = result.replace(re, m => `<span class="redacted">${'█'.repeat(m.length)}</span>`);
     }
     return result;
@@ -814,7 +814,7 @@
     function censorString(s) {
       for (const v of toRedact) {
         if (v.length < 3) continue;
-        const re = new RegExp(`(?<![\\w])${escapeRegex(v)}(?![\\w])`, 'gi');
+        const re = new RegExp(`(?<![\\w])${escapeRegex(v)}\\w*`, 'gi');
         s = s.replace(re, m => '█'.repeat(m.length));
       }
       return s;
