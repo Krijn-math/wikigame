@@ -197,6 +197,20 @@
       line-height: 1.3;
     }
 
+    .title-hint {
+      font-size: 1.35rem;
+      font-weight: bold;
+      user-select: none;
+      cursor: default;
+      margin-bottom: 1.1rem;
+      line-height: 1.3;
+    }
+
+    .title-hint .blurred-char {
+      display: inline-block;
+      filter: blur(7px);
+    }
+
     .hint-text { font-size: 0.85rem; color: #888; font-family: monospace; margin-bottom: 1rem; }
 
     .second-para {
@@ -474,6 +488,28 @@
     'it','its','that','this','which','who','also','known',
   ]);
 
+  // level 0 = fully blurred, 1 = first letter visible, 2 = first letter of each word visible
+  function titleHintHTML(title, level) {
+    if (level === 0) {
+      return `<div id="title-display" class="blurred-title">${title}</div>`;
+    }
+    let html = '<div id="title-display" class="title-hint">';
+    let wordStart = true;
+    let titleStart = true;
+    for (const ch of title) {
+      if (ch === ' ') {
+        html += ' ';
+        wordStart = true;
+        continue;
+      }
+      const reveal = (level >= 1 && titleStart) || (level >= 2 && wordStart);
+      html += reveal ? ch : `<span class="blurred-char">${ch}</span>`;
+      wordStart = false;
+      titleStart = false;
+    }
+    return html + '</div>';
+  }
+
   function censorExtract(extract, title) {
     const phrases = titleVariants(title);
     const words = title.split(/[\s\-_]+/).filter(w => {
@@ -667,7 +703,7 @@
 
     document.getElementById('game').innerHTML = `
       <div id="infobox-slot"></div>
-      <div class="blurred-title">${art.title}</div>
+      ${titleHintHTML(art.title, 0)}
       <div class="extract">${censored}</div>
       <div id="second-para"></div>
       <div style="clear:both"></div>
@@ -721,6 +757,10 @@
 
     if (guessNumber === 2) revealSecondParagraph();
     if (guessNumber === 3) revealInfobox();
+
+    // Update title hint: guess 2 → first letter, guess 3 → first letter of each word
+    const titleDisplay = document.getElementById('title-display');
+    if (titleDisplay) titleDisplay.outerHTML = titleHintHTML(gameArticles[articleIndex].title, guessNumber - 1);
 
     input.focus();
   }
@@ -851,8 +891,8 @@
     if (outcome === 'wrong') revealInfobox();
 
     // Unblur title and uncensor text
-    const titleEl = document.querySelector('.blurred-title');
-    if (titleEl) titleEl.style.filter = 'none';
+    const titleEl = document.getElementById('title-display');
+    if (titleEl) titleEl.outerHTML = `<div id="title-display" class="title-hint">${art.title}</div>`;
 
     const extractEl = document.querySelector('.extract');
     if (extractEl) extractEl.innerHTML = art.extract;
